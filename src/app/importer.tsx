@@ -55,9 +55,17 @@ export default function Importer() {
     }
   }, []);
 
-  // The iOS Shortcut opens /?url=<shared link>; import straight away.
+  // The iOS Shortcut opens /?url=<shared link>#token=<access code>; import straight away.
+  // The token rides in the #fragment so it never reaches the server or its logs.
   useEffect(() => {
     if (started.current) return;
+    const hashToken = new URLSearchParams(window.location.hash.slice(1)).get("token");
+    if (hashToken) {
+      try {
+        localStorage.setItem(TOKEN_KEY, hashToken);
+      } catch {}
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
     const shared = params.get("url") ?? params.get("text");
     if (shared) {
       started.current = true;

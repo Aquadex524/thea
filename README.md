@@ -42,12 +42,12 @@ Import the GitHub repo at vercel.com/new, add the env vars above, deploy. Then o
 ## iOS Shortcut: share a TikTok into Thea
 
 1. Shortcuts app → **+** → name it **Thea**.
-2. Tap the **ⓘ** → turn on **Show in Share Sheet** → set it to receive **URLs** and **Text**.
-3. Add action **URL Encode** (input: *Shortcut Input*).
-4. Add action **URL** with `https://YOUR-THEA-DOMAIN/?url=` followed by the *URL Encoded Text* variable.
-5. Add action **Open URLs**.
+2. Tap the **ⓘ** (or the down-arrow next to the name) → turn on **Show in Share Sheet** → under "Receive", allow **URLs** and **Text**.
+3. Add action **URL Encode**. Its input should be *Shortcut Input*.
+4. Add action **Text** containing: `https://thea-beta.vercel.app/?url=` then the *URL Encoded Text* variable, then `#token=` followed by your `THEA_SHARE_TOKEN`.
+5. Add action **Open URLs** (input: the *Text* from step 4).
 
-Now in TikTok: Share → **Copy link** isn't needed — tap **More / Share to** → **Thea**. Thea opens and starts reading the video.
+In TikTok: **Share → More (…) → Thea**. Safari opens Thea and it starts reading the video. The `#token=` part never leaves your phone; Thea stores it and removes it from the address bar.
 
 (Milestone 2 changes this so the Shortcut saves straight to your recipe library in the background and just shows a "Saved" notification.)
 
