@@ -2,7 +2,9 @@
 
 Personal app that turns TikTok / Instagram cooking videos into structured recipes, then (later milestones) a weekly meal plan and an Instacart order.
 
-**Milestone 1 (this code):** share or paste one TikTok link → Thea pulls the caption and the spoken transcript → Claude turns them into a structured recipe (ingredients normalized for shopping, steps, things to double-check).
+**Milestone 1:** share or paste one TikTok link → Thea pulls the caption and the spoken transcript → Claude turns them into a structured recipe (ingredients normalized for shopping, steps, things to double-check).
+
+**Milestone 2:** every link you send Thea is saved to a **recipe library** (`/library`), with the link, the recipe and the date. A second iOS Shortcut, **Save to Thea**, saves in the background without opening Safari and just shows a notification.
 
 ## How it works
 
@@ -10,7 +12,29 @@ Personal app that turns TikTok / Instagram cooking videos into structured recipe
 2. If TikTok has no subtitles for a video (music-only videos, for example) and `SUPADATA_API_KEY` is set, `supadata.ts` asks Supadata for an AI transcript. Otherwise Thea works from the caption alone and says so.
 3. Instagram links currently need `SUPADATA_API_KEY`; without it, use **Paste text**.
 4. `src/lib/extract.ts` sends caption + transcript to Claude (`claude-opus-5-5`, structured output validated by the Zod schema in `src/lib/recipe.ts`).
-5. `POST /api/import` with `{ "url": "..." }` or `{ "text": "..." }` returns `{ source, recipe, warnings }`.
+5. `POST /api/import` with `{ "url": "..." }` or `{ "text": "..." }` returns `{ source, recipe, warnings, recipeId }` and saves it to the library.
+6. `POST /api/save` with `{ "url": "..." }` saves the link straight away and answers in about a second with `{ message }`; reading the video and writing the recipe carries on in the background (Next.js `after()`). Sharing the same video twice doesn't make a second copy, it just counts the share.
+7. `GET /api/recipes` lists the library; `GET/POST/DELETE /api/recipes/:id` shows one recipe, re-reads its video, or deletes it.
+
+## The recipe library (database)
+
+Recipes are stored in a free **Neon Postgres** database connected through Vercel. Thea creates its tables on its own the first time it runs (`src/lib/db.ts`), so there's nothing to set up beyond connecting it. Without a database Thea still works, it just doesn't save anything.
+
+- `recipes`: one row per saved video: the link you shared, the video's real link and ID, creator, caption, transcript, the full recipe from Claude (as JSON), title/servings/times/tags as their own columns, `status` (`pending` → `ready`, or `failed` / `not_recipe`), `times_shared`, `created_at`, `last_shared_at`.
+- `recipe_ingredients`: one row per ingredient (name, quantity, unit, store category, staple or not). Later milestones (pantry, weekly planner, Instacart list) read these directly.
+
+### Connect the database in Vercel (one time)
+
+1. Go to vercel.com, open the **thea** project.
+2. Click the **Storage** tab at the top → **Create Database** (or **Connect Database** → **Create New**).
+3. Pick **Neon** (Serverless Postgres) → **Continue**.
+4. Region: **Washington, D.C. (iad1)** is fine. Plan: **Free**. Name it `thea-db` → **Create**.
+5. When it asks which project to connect, choose **thea** and leave all environments ticked → **Connect**. Vercel adds `DATABASE_URL` (and a few related variables) to the project for you. You never need to copy or paste it.
+6. Redeploy so the site picks it up: **Deployments** tab → the top one → **⋯** → **Redeploy**. (Merging new code to `main` also redeploys.)
+
+Check: open `https://thea-beta.vercel.app/library`. It should say "Nothing saved yet" instead of "No database connected yet".
+
+For local development, `vercel env pull .env.local` copies the same variables to your computer, or point `DATABASE_URL` at any Postgres.
 
 ## Run locally
 
@@ -47,9 +71,22 @@ Import the GitHub repo at vercel.com/new, add the env vars above, deploy. Then o
 4. Add action **Text** containing: `https://thea-beta.vercel.app/?url=` then the *URL Encoded Text* variable, then `#token=` followed by your `THEA_SHARE_TOKEN`.
 5. Add action **Open URLs** (input: the *Text* from step 4).
 
-In TikTok: **Share → More (…) → Thea**. Safari opens Thea and it starts reading the video. The `#token=` part never leaves your phone; Thea stores it and removes it from the address bar.
+In TikTok: **Share → More (…) → Thea**. Safari opens Thea and it starts reading the video. The `#token=` part never leaves your phone; Thea stores it and removes it from the address bar. The recipe is saved to the library too.
 
-(Milestone 2 changes this so the Shortcut saves straight to your recipe library in the background and just shows a "Saved" notification.)
+## iOS Shortcut: save to the library without opening Safari
+
+A second Shortcut, for when you just want to save the video and keep scrolling.
+
+1. Shortcuts app → **+** → name it **Save to Thea**.
+2. Tap **ⓘ** → turn on **Show in Share Sheet** → under "Receive", allow **URLs** and **Text**.
+3. Add action **Get Contents of URL**. Set the URL to `https://thea-beta.vercel.app/api/save`. Tap the arrow (**Show More**) and set:
+   - **Method**: `POST`
+   - **Headers** → **Add new header**: key `Authorization`, value `Bearer ` (with a space) followed by your `THEA_SHARE_TOKEN`
+   - **Request Body**: `JSON` → **Add new field** → **Text**: key `url`, value *Shortcut Input*
+4. Add action **Get Dictionary Value**: get **Value** for key `message` in *Contents of URL*.
+5. Add action **Show Notification** with *Dictionary Value*.
+
+In TikTok: **Share → More (…) → Save to Thea**. After a second you get "Saved to Thea…"; the recipe appears in **Library** about a minute later. If a video can't be read, it shows as **Failed** in the library with a **Try again** button.
 
 ## Notes
 

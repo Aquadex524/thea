@@ -77,4 +77,6 @@ export type ImportResult = {
   recipe: Recipe;
   model: string;
   warnings: string[];
+  /** Set when the import was saved to the recipe library. */
+  recipeId?: string;
 };

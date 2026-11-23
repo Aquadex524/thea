@@ -3,17 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { ImportResult } from "@/lib/recipe";
+import Link from "next/link";
 import RecipeCard from "./recipe-card";
-
-const TOKEN_KEY = "thea_token";
-
-function readToken(): string {
-  try {
-    return localStorage.getItem(TOKEN_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
+import { TOKEN_KEY, readToken } from "./token";
 
 export default function Importer() {
   const params = useSearchParams();
@@ -151,6 +143,14 @@ export default function Importer() {
       )}
 
       {loading && <LoadingCard />}
+      {result?.recipeId && (
+        <Link
+          href={`/recipes/${result.recipeId}`}
+          className="block rounded-2xl border border-good/30 bg-good/10 p-3 text-center text-sm font-medium text-good"
+        >
+          Saved to your library
+        </Link>
+      )}
       {result && <RecipeCard result={result} />}
     </div>
   );
