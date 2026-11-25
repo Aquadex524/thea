@@ -1,6 +1,19 @@
 "use client";
 
-import type { ImportResult, Ingredient } from "@/lib/recipe";
+import { TIERS, type Tier } from "@/lib/ingredients/tiers";
+import type { ImportResult, Ingredient, NormalizedLine } from "@/lib/recipe";
+
+/** Little colored label showing how fast an item goes off. Pantry items get none. */
+export function TierPill({ tier }: { tier: Tier | null | undefined }) {
+  if (!tier || tier === "pantry") return null;
+  const cls =
+    tier === "days" ? "bg-rust/15 text-rust" : tier === "week" ? "bg-gold/25 text-warn-ink" : "bg-navy/10 text-navy";
+  return (
+    <span title={TIERS[tier].label} className={`ml-1.5 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${cls}`}>
+      {TIERS[tier].short}
+    </span>
+  );
+}
 
 const CATEGORY_LABEL: Record<Ingredient["category"], string> = {
   produce: "Produce",
@@ -30,12 +43,21 @@ export default function RecipeCard({ result }: { result: ImportResult }) {
     );
   }
 
-  const groups = new Map<Ingredient["category"], Ingredient[]>();
-  for (const ing of recipe.ingredients) {
+  type Line = Ingredient & { norm?: NormalizedLine };
+  const byPosition = new Map((result.normalized ?? []).map((n) => [n.position, n]));
+  const groups = new Map<Ingredient["category"], Line[]>();
+  recipe.ingredients.forEach((ing, position) => {
     const list = groups.get(ing.category) ?? [];
-    list.push(ing);
+    list.push({ ...ing, norm: byPosition.get(position) });
     groups.set(ing.category, list);
-  }
+  });
+  const fresh = [
+    ...new Set(
+      (result.normalized ?? [])
+        .filter((n) => n.tier === "days" && !recipe.ingredients[n.position]?.is_staple)
+        .map((n) => n.item),
+    ),
+  ];
   const total = (recipe.prep_minutes ?? 0) + (recipe.cook_minutes ?? 0);
 
   return (
@@ -84,6 +106,12 @@ export default function RecipeCard({ result }: { result: ImportResult }) {
 
       <section className="border-b border-line p-5">
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Ingredients</h3>
+        {fresh.length > 0 && (
+          <p className="mb-3 rounded-xl bg-rust/10 px-3 py-2 text-sm text-rust">
+            Cook this early in the week: <span className="font-medium">{fresh.join(", ")}</span>{" "}
+            {fresh.length === 1 ? "keeps" : "keep"} only 2–3 days.
+          </p>
+        )}
         <div className="space-y-4">
           {[...groups.entries()].map(([cat, items]) => (
             <div key={cat}>
@@ -92,9 +120,10 @@ export default function RecipeCard({ result }: { result: ImportResult }) {
                 {items.map((i, idx) => (
                   <li key={idx} className="flex items-baseline justify-between gap-3 py-2 text-[15px]">
                     <span>
-                      <span className="font-medium capitalize">{i.name}</span>
+                      <span className="font-medium capitalize">{i.norm?.item ?? i.name}</span>
                       {i.preparation && <span className="text-muted">, {i.preparation}</span>}
                       {i.is_staple && <span className="ml-1.5 text-xs text-muted">staple</span>}
+                      <TierPill tier={i.norm?.tier} />
                     </span>
                     <span
                       className={`shrink-0 tabular-nums ${i.uncertain ? "text-warn-ink" : "text-ink"}`}

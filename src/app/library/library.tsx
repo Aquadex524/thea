@@ -53,7 +53,7 @@ export default function Library() {
     const q = query.trim().toLowerCase();
     if (!recipes || !q) return recipes;
     return recipes.filter((r) =>
-      [r.title, r.author, ...r.tags].some((s) => s?.toLowerCase().includes(q)),
+      [r.title, r.author, ...r.tags, ...(r.items ?? [])].some((s) => s?.toLowerCase().includes(q)),
     );
   }, [recipes, query]);
 
@@ -74,7 +74,7 @@ export default function Library() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search recipes, creators, tags"
+          placeholder="Search recipes, creators, ingredients"
           className="flex-1 rounded-xl border border-line bg-card px-3.5 py-2.5 text-[15px] outline-none focus:border-navy"
         />
         <span className="shrink-0 text-xs text-muted tabular-nums">{recipes.length} saved</span>
@@ -105,6 +105,9 @@ export default function Library() {
                   .filter(Boolean)
                   .join(" · ")}
               </p>
+              {r.fresh_items?.length > 0 && (
+                <p className="mt-1 text-xs text-rust">Use fast: {r.fresh_items.join(", ")}</p>
+              )}
               {r.status === "failed" && r.error && <p className="mt-1 text-xs text-rust">{r.error}</p>}
               {r.tags.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
