@@ -20,6 +20,26 @@ export default function SendToInstacart({ recipeId }: { recipeId: string }) {
   const [items, setItems] = useState<Item[]>([]);
   const [showItems, setShowItems] = useState(false);
   const [done, setDone] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState(false);
+
+  /** A message to paste to Claude, which can add every item to the Instacart cart in Chrome. */
+  const copyForClaude = async () => {
+    const lines = items.map((it) => `- ${it.label}${it.amount ? `, ${it.amount}` : ""}`);
+    const text = [
+      "Using Claude in Chrome, open Key Food on Instacart (https://www.instacart.com/store/key-food) and add these to my cart.",
+      "For each item, pick the closest match in about the amount listed, preferring the cheaper option.",
+      "Don't check out. When you're done, tell me what you added and anything you couldn't find.",
+      "",
+      ...lines,
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setError("Couldn't copy. Long-press to select the list instead.");
+    }
+  };
 
   const loadItems = useCallback(async () => {
     try {
@@ -124,6 +144,15 @@ export default function SendToInstacart({ recipeId }: { recipeId: string }) {
           </a>
           {result.environment === "development" && " (test mode)"}
         </p>
+      )}
+
+      {items.length > 0 && (
+        <button
+          onClick={copyForClaude}
+          className="w-full rounded-xl border border-line px-4 py-2.5 font-semibold text-navy"
+        >
+          {copied ? "Copied. Paste it to Claude" : "Copy list for Claude to add to my cart"}
+        </button>
       )}
 
       {configured === false && itemList}
