@@ -96,9 +96,11 @@ export function toMeasurement(name: string, quantity: number | null, unit: strin
   // Garlic is sold by the head, not the clove.
   if (u === "clove" || u === "cloves") return /garlic/i.test(name) ? { quantity: 1, unit: "head" } : null;
   if (quantity == null || !(quantity > 0)) return null;
-  if (u == null) return { quantity: round(quantity), unit: "each" };
+  // You can't buy half a lemon: round counted items up.
+  if (u == null) return { quantity: Math.ceil(quantity), unit: "each" };
   const mapped = UNIT_MAP[u];
-  return mapped ? { quantity: round(quantity), unit: mapped } : null;
+  if (!mapped) return null;
+  return { quantity: mapped === "each" ? Math.ceil(quantity) : round(quantity), unit: mapped };
 }
 
 const CATEGORY_ORDER = ["produce", "herbs", "meat_seafood", "dairy_eggs", "bakery", "pantry", "spices", "frozen", "other"];
