@@ -8,6 +8,19 @@ Personal app that turns TikTok / Instagram cooking videos into structured recipe
 
 **Milestone 2b, ingredient normalization:** every ingredient in every saved recipe is matched to one grocery item ("scallions", "spring onions" and "green onions" are all **green onion**), its amount is put in a standard unit, and it gets a freshness tier saying how fast it goes off. The **Items** page (`/ingredients`) lists them all; recipe pages show a "cook this early in the week" note when something keeps only 2–3 days.
 
+**Milestone 3 (part 1):** the **Week** tab (`/week`) recommends which saved recipes to cook this week. It offers three plans (Most efficient, Newest, Wildcard), puts them on your cook days, and shows which fresh items get shared and which might go to waste.
+
+### How the weekly optimizer picks recipes
+
+`src/lib/plan/optimizer.ts` is plain math, no AI call, so it's instant and free:
+
+1. Every fresh item counts by how fast it spoils (from the ingredient dictionary): herbs, greens and meat count the most, pantry items barely, staples (salt, oil) not at all.
+2. It tries every combination of saved recipes (one per cook day) and scores each one: points for fresh items that two or more meals share, a penalty for fresh items only one meal uses, a small penalty per item to buy, and a small bonus for recently saved recipes.
+3. It puts the chosen meals on your cook days so the quickest-spoiling ingredients are cooked first.
+4. For a fresh item only one meal uses, it looks for another saved recipe that uses it ("Use it up: add …").
+
+Settings (saved in the `app_settings` table): cook days (default Sun, Mon, Tue), portions per recipe (2; leftovers 2 days later), ingredients to avoid, pinned recipes (always in) and "not this week" recipes. `GET /api/plan` returns the plans; `PUT /api/plan { settings }` saves settings and re-plans. Check the logic with `npx tsx scripts/test-optimizer.mts`.
+
 **Milestone 4 (first part):** a **Shop on Instacart** button on each saved recipe sends its ingredients to Instacart as a shopping list. Instacart opens with the items matched to real products at your store; you review and check out there.
 
 ## How it works
