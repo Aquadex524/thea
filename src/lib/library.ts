@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 import { db } from "./db";
 import { extractRecipe } from "./extract";
+import { normalizedLines, normalizeRecipe } from "./ingredients/normalize";
 import type { ImportResult, Recipe, VideoSource } from "./recipe";
 import { fetchVideoSource, findUrl, isInstagramUrl } from "./sources";
 import { isTikTokUrl } from "./sources/tiktok";
@@ -33,7 +34,15 @@ export type RecipeRow = {
 export type RecipeSummary = Pick<
   RecipeRow,
   "id" | "status" | "platform" | "author" | "title" | "tags" | "error" | "times_shared" | "created_at" | "last_shared_at"
-> & { source_url: string | null; total_minutes: number | null; item_count: number | null };
+> & {
+  source_url: string | null;
+  total_minutes: number | null;
+  item_count: number | null;
+  /** Grocery items this recipe uses (normalized names), for search. */
+  items: string[];
+  /** The ones that only keep 2–3 days. */
+  fresh_items: string[];
+};
 
 export type SaveOutcome = { row: RecipeRow; alreadySaved: boolean };
 
@@ -141,7 +150,7 @@ export async function processRecipe(id: string): Promise<RecipeRow> {
 
     const { recipe, model } = await extractRecipe(source);
 
-    return await sql.begin(async (tx) => {
+    const saved = await sql.begin(async (tx) => {
       const [saved] = await tx<RecipeRow[]>`
         update recipes set
           status = ${recipe.is_recipe ? "ready" : "not_recipe"},
@@ -169,6 +178,10 @@ export async function processRecipe(id: string): Promise<RecipeRow> {
       }
       return saved;
     });
+    // Match each ingredient to its grocery item, standard unit and freshness tier.
+    // If this fails the recipe is still saved; the library catches up on its next load.
+    await normalizeRecipe(sql, id).catch((e) => console.error("[library] normalizing", id, e));
+    return saved;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Something went wrong";
     console.error("[library] processing", id, err);
@@ -184,7 +197,11 @@ export async function listRecipes(): Promise<RecipeSummary[]> {
     select r.id, r.status, r.platform, r.author, r.title, r.tags, r.error, r.times_shared,
            r.created_at, r.last_shared_at, coalesce(r.source_url, r.shared_url) as source_url,
            nullif(coalesce(r.prep_minutes, 0) + coalesce(r.cook_minutes, 0), 0) as total_minutes,
-           (select count(*)::int from recipe_ingredients i where i.recipe_id = r.id and not i.is_staple) as item_count
+           (select count(*)::int from recipe_ingredients i where i.recipe_id = r.id and not i.is_staple) as item_count,
+           array(select distinct ri.item from recipe_ingredients ri
+                 where ri.recipe_id = r.id and ri.item is not null) as items,
+           array(select distinct ri.item from recipe_ingredients ri join ingredients g on g.name = ri.item
+                 where ri.recipe_id = r.id and g.tier = 'days' and not ri.is_staple) as fresh_items
     from recipes r
     order by r.last_shared_at desc
     limit 500`;
@@ -222,4 +239,16 @@ export function toImportResult(row: RecipeRow): ImportResult | null {
     model: row.model ?? "",
     warnings: row.warnings,
   };
+}
+
+/** Same as toImportResult, plus each ingredient's grocery item and freshness from the database. */
+export async function toImportResultWithItems(row: RecipeRow): Promise<ImportResult | null> {
+  const result = toImportResult(row);
+  if (!result) return null;
+  try {
+    result.normalized = await normalizedLines(await db(), row.id);
+  } catch (err) {
+    console.error("[library] reading normalized ingredients", err);
+  }
+  return result;
 }
