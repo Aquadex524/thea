@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAuthorized } from "@/lib/auth";
-import { deleteRecipe, getRecipe, processRecipe, toImportResult } from "@/lib/library";
+import { deleteRecipe, getRecipe, processRecipe, toImportResultWithItems } from "@/lib/library";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,8 +8,8 @@ export const maxDuration = 120;
 
 type Ctx = { params: Promise<{ id: string }> };
 
-function payload(row: NonNullable<Awaited<ReturnType<typeof getRecipe>>>) {
-  return { recipe: row, result: toImportResult(row) };
+async function payload(row: NonNullable<Awaited<ReturnType<typeof getRecipe>>>) {
+  return { recipe: row, result: await toImportResultWithItems(row) };
 }
 
 /** GET /api/recipes/:id -> { recipe: RecipeRow, result: ImportResult | null } */
@@ -17,7 +17,7 @@ export async function GET(req: Request, { params }: Ctx) {
   if (!isAuthorized(req)) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   const row = await getRecipe((await params).id);
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(payload(row));
+  return NextResponse.json(await payload(row));
 }
 
 /** POST /api/recipes/:id  { action: "retry" } -> reads the video again and rewrites the recipe. */
@@ -26,7 +26,7 @@ export async function POST(req: Request, { params }: Ctx) {
   const row = await getRecipe((await params).id);
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const updated = await processRecipe(row.id);
-  return NextResponse.json(payload(updated));
+  return NextResponse.json(await payload(updated));
 }
 
 /** DELETE /api/recipes/:id -> removes it from the library. */

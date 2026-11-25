@@ -1,37 +1,27 @@
 import type postgres from "postgres";
 import { db } from "../db";
+import { normalizePending } from "../ingredients/normalize";
 import { DAYS, DEFAULT_SETTINGS, type DayName, type PlanIngredient, type PlanRecipe, type PlanSettings } from "./optimizer";
 
 /**
  * Reads the saved recipes in the shape the optimizer needs.
  *
  * Ingredient names and freshness come from the ingredient dictionary (the `ingredients` table and
- * the `item` column on recipe_ingredients). If that hasn't been set up yet, it falls back to the raw
- * ingredient name and a rough guess from the store section, so the planner works either way.
+ * the `item` column on recipe_ingredients, see src/lib/ingredients). An item the dictionary hasn't
+ * matched falls back to its raw name and a rough guess from its store section.
  */
 export async function loadPlanRecipes(): Promise<PlanRecipe[]> {
   const sql = await db();
-  const [{ normalized }] = await sql<{ normalized: boolean }[]>`
-    select to_regclass('ingredients') is not null
-       and exists (select 1 from information_schema.columns
-                   where table_name = 'recipe_ingredients' and column_name = 'item') as normalized`;
-
-  const rows = normalized
-    ? await sql<Row[]>`
-        select r.id, r.title, r.prep_minutes, r.cook_minutes, r.servings, r.last_shared_at,
-               ri.name, ri.category, ri.is_staple, ri.item, i.shelf_days, i.staple
-        from recipes r
-        join recipe_ingredients ri on ri.recipe_id = r.id
-        left join ingredients i on i.name = ri.item
-        where r.status = 'ready'
-        order by r.last_shared_at desc, ri.position`
-    : await sql<Row[]>`
-        select r.id, r.title, r.prep_minutes, r.cook_minutes, r.servings, r.last_shared_at,
-               ri.name, ri.category, ri.is_staple, null as item, null::int as shelf_days, null::boolean as staple
-        from recipes r
-        join recipe_ingredients ri on ri.recipe_id = r.id
-        where r.status = 'ready'
-        order by r.last_shared_at desc, ri.position`;
+  // Recipes saved before the ingredient dictionary existed get their canonical names first.
+  await normalizePending(sql).catch((e) => console.error("[plan] normalizing", e));
+  const rows = await sql<Row[]>`
+    select r.id, r.title, r.prep_minutes, r.cook_minutes, r.servings, r.last_shared_at,
+           ri.name, ri.category, ri.is_staple, ri.item, i.shelf_days, i.staple
+    from recipes r
+    join recipe_ingredients ri on ri.recipe_id = r.id
+    left join ingredients i on i.name = ri.item
+    where r.status = 'ready'
+    order by r.last_shared_at desc, ri.position`;
 
   const byId = new Map<string, PlanRecipe>();
   for (const row of rows) {
