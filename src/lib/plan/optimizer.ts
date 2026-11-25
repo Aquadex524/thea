@@ -229,7 +229,7 @@ function sequence(set: Prepared[], offsets: number[]): Prepared[] {
     order.forEach((p, i) => {
       for (const [key, it] of p.items) {
         lastUse.set(key, Math.max(lastUse.get(key) ?? 0, offsets[i]));
-        cost += it.weight * offsets[i] * 0.1; // fresher stuff earlier
+        cost += (offsets[i] * 10) / Math.max(1, it.shelfDays); // the quicker it spoils, the earlier it's cooked
       }
     });
     for (const [key, day] of lastUse) {
