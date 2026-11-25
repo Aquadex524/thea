@@ -234,3 +234,19 @@ export async function createShoppingListLink(req: ListRequest): Promise<ListLink
   }
   return { url, itemCount: lineItems.length, environment: env, reused: false };
 }
+
+/**
+ * Backup that needs no API key: a link to Instacart's search for one item at Wes's store.
+ * INSTACART_STORE is the store's name in Instacart links (instacart.com/store/<this>), default Key Food.
+ */
+export function storeSearchUrl(name: string): string {
+  const store = process.env.INSTACART_STORE?.trim() || "key-food";
+  return `https://www.instacart.com/store/${encodeURIComponent(store)}/s?k=${encodeURIComponent(name)}`;
+}
+
+/** "2 tbsp", "1 head", "3" — the amount of a line item in words, or "" if none. */
+export function amountText(line: LineItem): string {
+  const m = line.line_item_measurements?.[0];
+  if (!m) return "";
+  return m.unit === "each" ? String(m.quantity) : `${m.quantity} ${m.unit}`;
+}

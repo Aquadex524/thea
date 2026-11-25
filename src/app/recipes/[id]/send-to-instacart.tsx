@@ -1,16 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { authFetch } from "../../token";
 
 type Result = { url: string; itemCount: number; environment: "development" | "production" };
+type Item = { name: string; label: string; amount: string; searchUrl: string };
 
-/** "Shop on Instacart": turns this recipe's ingredients into an Instacart shopping list. */
+/**
+ * "Shop on Instacart": turns this recipe's ingredients into an Instacart shopping list.
+ * Until Thea has an Instacart API key, it shows the list item by item instead, each item
+ * linking to a search for it at Key Food on Instacart.
+ */
 export default function SendToInstacart({ recipeId }: { recipeId: string }) {
   const [includeStaples, setIncludeStaples] = useState(false);
   const [working, setWorking] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [showItems, setShowItems] = useState(false);
+  const [done, setDone] = useState<Set<string>>(new Set());
+
+  const loadItems = useCallback(async () => {
+    try {
+      const res = await authFetch(`/api/instacart?recipeId=${recipeId}&includeStaples=${includeStaples ? 1 : 0}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Couldn't load the shopping list");
+      setConfigured(data.configured);
+      setItems(data.items);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't load the shopping list");
+    }
+  }, [recipeId, includeStaples]);
+
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
 
   const send = async () => {
     setWorking(true);
@@ -35,15 +62,47 @@ export default function SendToInstacart({ recipeId }: { recipeId: string }) {
     }
   };
 
+  const itemList = (
+    <ul className="divide-y divide-line">
+      {items.map((it) => (
+        <li key={it.name}>
+          <a
+            href={it.searchUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setDone((d) => new Set(d).add(it.name))}
+            className={`flex items-center justify-between gap-3 py-2.5 ${done.has(it.name) ? "opacity-40" : ""}`}
+          >
+            <span className="font-medium text-ink">
+              {done.has(it.name) && "✓ "}
+              {it.label}
+              {it.amount && <span className="font-normal text-muted"> · {it.amount}</span>}
+            </span>
+            <span className="shrink-0 font-medium text-navy">Find →</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <div className="space-y-3 rounded-2xl border border-line bg-card p-4 text-sm">
-      <button
-        onClick={send}
-        disabled={working}
-        className="flex h-[46px] w-full items-center justify-center rounded-full bg-[#003D29] px-5 font-semibold text-[#FAF1E5] disabled:opacity-50"
-      >
-        {working ? "Making your list…" : "Shop on Instacart"}
-      </button>
+      {configured !== false && (
+        <button
+          onClick={send}
+          disabled={working || configured === null}
+          className="flex h-[46px] w-full items-center justify-center rounded-full bg-[#003D29] px-5 font-semibold text-[#FAF1E5] disabled:opacity-50"
+        >
+          {working ? "Making your list…" : "Shop on Instacart"}
+        </button>
+      )}
+      {configured === false && (
+        <div>
+          <p className="font-semibold text-ink">Shop on Instacart, item by item</p>
+          <p className="mt-0.5 text-muted">Tap each item to find it at Key Food on Instacart and add it to your cart.</p>
+        </div>
+      )}
+
       <label className="flex items-center gap-2 text-muted">
         <input
           type="checkbox"
@@ -56,6 +115,7 @@ export default function SendToInstacart({ recipeId }: { recipeId: string }) {
         />
         Include staples (salt, oil, butter, spices)
       </label>
+
       {result && (
         <p className="text-muted">
           {result.itemCount} items sent.{" "}
@@ -65,6 +125,17 @@ export default function SendToInstacart({ recipeId }: { recipeId: string }) {
           {result.environment === "development" && " (test mode)"}
         </p>
       )}
+
+      {configured === false && itemList}
+      {configured && items.length > 0 && (
+        <div>
+          <button onClick={() => setShowItems((s) => !s)} className="font-medium text-navy">
+            {showItems ? "Hide item list" : "Or shop item by item"}
+          </button>
+          {showItems && <div className="mt-2">{itemList}</div>}
+        </div>
+      )}
+
       {error && <p className="text-rust">{error}</p>}
     </div>
   );

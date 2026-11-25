@@ -76,6 +76,8 @@ For local development, `vercel env pull .env.local` copies the same variables to
 - Staples (salt, oil, basic spices) are left out unless you tick **Include staples**.
 - Instacart asks apps to reuse links, so Thea remembers each link in the `instacart_links` table and reuses it for 25 days while the list is unchanged.
 - `POST /api/instacart` with `{ "recipeId": "...", "includeStaples": false }` returns `{ url, itemCount }`.
+- **No key yet?** The recipe page shows the list item by item instead, each linking to Instacart's search at Key Food (`instacart.com/store/key-food/s?k=…`). Set `INSTACART_STORE` to another store's name from its Instacart link to change it. `GET /api/instacart?recipeId=…` returns that list.
+- As of November 2026 Instacart's developer page says it isn't accepting new applications; check back there.
 
 ### Getting an Instacart API key
 
