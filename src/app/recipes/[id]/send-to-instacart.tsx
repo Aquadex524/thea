@@ -54,7 +54,7 @@ export default function SendToInstacart({ recipeId }: { recipeId: string }) {
           }}
           className="h-4 w-4 accent-[#003D29]"
         />
-        Include staples (salt, oil, basic spices)
+        Include staples (salt, oil, butter, spices)
       </label>
       {result && (
         <p className="text-muted">

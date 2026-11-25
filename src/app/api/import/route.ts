@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isAuthorized } from "@/lib/auth";
 import { databaseUrl } from "@/lib/db";
 import { extractRecipe } from "@/lib/extract";
-import { BadLinkError, processRecipe, startManualSave, startSave, toImportResult } from "@/lib/library";
+import { BadLinkError, processRecipe, startManualSave, startSave, toImportResultWithItems } from "@/lib/library";
 import type { ImportResult, VideoSource } from "@/lib/recipe";
 import { fetchVideoSource, findUrl } from "@/lib/sources";
 
@@ -78,7 +78,7 @@ async function importAndSave(url: string | null, text: string) {
     } else {
       row = await processRecipe((await startManualSave(text)).id);
     }
-    const result = toImportResult(row);
+    const result = await toImportResultWithItems(row);
     if (!result) return NextResponse.json({ error: row.error ?? "Import failed", recipeId: row.id }, { status: 502 });
     return NextResponse.json({ ...result, recipeId: row.id });
   } catch (err) {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export default function Header({ active }: { active: "add" | "library" }) {
+export default function Header({ active }: { active: "add" | "library" | "ingredients" }) {
   const tab = (href: string, label: string, on: boolean) => (
     <Link
       href={href}
@@ -20,6 +20,7 @@ export default function Header({ active }: { active: "add" | "library" }) {
       <nav className="flex gap-1 rounded-full border border-line bg-bg p-1">
         {tab("/", "Add", active === "add")}
         {tab("/library", "Library", active === "library")}
+        {tab("/ingredients", "Items", active === "ingredients")}
       </nav>
     </header>
   );

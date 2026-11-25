@@ -6,6 +6,8 @@ Personal app that turns TikTok / Instagram cooking videos into structured recipe
 
 **Milestone 2:** every link you send Thea is saved to a **recipe library** (`/library`), with the link, the recipe and the date. A second iOS Shortcut, **Save to Thea**, saves in the background without opening Safari and just shows a notification.
 
+**Milestone 2b, ingredient normalization:** every ingredient in every saved recipe is matched to one grocery item ("scallions", "spring onions" and "green onions" are all **green onion**), its amount is put in a standard unit, and it gets a freshness tier saying how fast it goes off. The **Items** page (`/ingredients`) lists them all; recipe pages show a "cook this early in the week" note when something keeps only 2–3 days.
+
 **Milestone 4 (first part):** a **Shop on Instacart** button on each saved recipe sends its ingredients to Instacart as a shopping list. Instacart opens with the items matched to real products at your store; you review and check out there.
 
 ## How it works
@@ -23,7 +25,21 @@ Personal app that turns TikTok / Instagram cooking videos into structured recipe
 Recipes are stored in a free **Neon Postgres** database connected through Vercel. Thea creates its tables on its own the first time it runs (`src/lib/db.ts`), so there's nothing to set up beyond connecting it. Without a database Thea still works, it just doesn't save anything.
 
 - `recipes`: one row per saved video: the link you shared, the video's real link and ID, creator, caption, transcript, the full recipe from Claude (as JSON), title/servings/times/tags as their own columns, `status` (`pending` → `ready`, or `failed` / `not_recipe`), `times_shared`, `created_at`, `last_shared_at`.
-- `recipe_ingredients`: one row per ingredient (name, quantity, unit, store category, staple or not). Later milestones (pantry, weekly planner, Instacart list) read these directly.
+- `recipe_ingredients`: one row per ingredient (name, quantity, unit, store category, staple or not, plus the normalized `item`, `amount`, `std_unit`). Later milestones (pantry, weekly planner, Instacart list) read these directly.
+- `ingredients`, `ingredient_aliases`, `thea_meta`: the grocery dictionary (see below).
+
+### Ingredient normalization (`src/lib/ingredients/`)
+
+- `catalog.ts`: the built-in grocery dictionary, about 300 common items, each with the other names recipes use for it, its store section and freshness. Add a line there to teach Thea a new item; plurals are handled automatically.
+- `tiers.ts`: the four freshness tiers. `days` (use within 2–3 days: soft herbs, leafy greens, berries, fresh meat and fish), `week` (about a week: most vegetables, soft dairy, bread), `weeks` (1–2 weeks or more: root vegetables, onions, garlic, hard cheese, eggs), `pantry` (months). Each item also has its own `shelf_days`.
+- `units.ts`: volumes become ml, weights become grams, countable things keep one spelling (`clove`, `can`, `bunch`, `each`…).
+- `normalize.ts`: looks a name up in the dictionary first; anything new is classified once by Claude (one small call for all new names together) and remembered, so it's never asked twice.
+
+Database: `recipe_ingredients` gets `item` (the grocery item), `amount` and `std_unit`; the new `ingredients` table holds one row per item (`tier`, `shelf_days`, `category`, `staple`, and `source`: catalog, claude, or guess); `ingredient_aliases` remembers which names Claude matched to which item.
+
+Older recipes are caught up automatically the next time the Library or Items page loads. When the dictionary changes, everything is re-matched once on its own. **Items → Re-check all ingredients** does it on demand.
+
+Check the matching without a database: `npx tsx scripts/check-ingredients.mts`.
 
 ### Connect the database in Vercel (one time)
 
@@ -42,7 +58,7 @@ For local development, `vercel env pull .env.local` copies the same variables to
 
 `src/lib/instacart.ts` calls Instacart's [Create shopping list page](https://docs.instacart.com/developer_platform_api/api/products/create_shopping_list_page) API. Thea sends item names and amounts; Instacart answers with a link to a list page where you pick the store (Key Food), see matched products and prices, and check out. Instacart doesn't share prices or let Thea place the order itself.
 
-- Ingredients come from `src/lib/grocery/items.ts` (`GroceryItem`). That's the one place to switch to normalized items, and the weekly grocery list will use the same `createShoppingListLink()`.
+- Ingredients come from `src/lib/grocery/items.ts` (`GroceryItem`). It uses the normalized grocery item name (so "scallions" is searched as **green onion**) with the recipe's own amount and unit. The weekly grocery list will use the same `createShoppingListLink()`.
 - Units are translated to the ones Instacart accepts (`g`, `cup`, `tbsp`, `can`, `bunch`, `each`…). Garlic cloves become one head. Anything Instacart can't measure (a pinch) is sent without an amount and Instacart suggests a normal pack.
 - Staples (salt, oil, basic spices) are left out unless you tick **Include staples**.
 - Instacart asks apps to reuse links, so Thea remembers each link in the `instacart_links` table and reuses it for 25 days while the list is unchanged.

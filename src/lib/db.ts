@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { migrateIngredients } from "./ingredients/normalize";
 
 /**
  * The recipe library lives in a Postgres database (Neon, added through Vercel's Storage tab).
@@ -70,4 +71,6 @@ async function migrate(sql: postgres.Sql) {
       primary key (recipe_id, position)
     )`;
   await sql`create index if not exists recipe_ingredients_name on recipe_ingredients (name)`;
+  // Milestone 2b: the grocery dictionary (one name per item, freshness tiers) and its columns.
+  await migrateIngredients(sql);
 }

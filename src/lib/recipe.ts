@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Tier } from "./ingredients/tiers";
 
 export const IngredientSchema = z.object({
   name: z
@@ -79,4 +80,15 @@ export type ImportResult = {
   warnings: string[];
   /** Set when the import was saved to the recipe library. */
   recipeId?: string;
+  /** Per ingredient line (by position): the grocery item it maps to, standard amount and freshness. */
+  normalized?: NormalizedLine[];
+};
+
+export type NormalizedLine = {
+  position: number;
+  item: string;
+  amount: number | null;
+  std_unit: string | null;
+  tier: Tier | null;
+  shelf_days: number | null;
 };

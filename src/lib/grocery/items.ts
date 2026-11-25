@@ -4,8 +4,9 @@ import { db } from "../db";
  * One thing to buy. Everything that sends groceries somewhere (Instacart today) works from this
  * shape, so it doesn't matter whether the items came from one recipe or a whole week's plan.
  *
- * When ingredient normalization lands, only the functions in this file need to change
- * (e.g. read normalized item names and units instead of the raw recipe ones).
+ * Names come from ingredient normalization (one name per grocery item, e.g. "scallions" ->
+ * "green onion") when it has run, else the name Claude wrote. Amounts stay in the recipe's own
+ * units, which read naturally on Instacart ("2 tbsp butter").
  */
 export type GroceryItem = {
   /** What to search the store for, e.g. "green onion". */
@@ -33,8 +34,10 @@ export async function recipeGroceryItems(recipeId: string): Promise<GroceryItem[
   if (!/^[0-9a-f-]{36}$/i.test(recipeId)) return [];
   const sql = await db();
   const rows = await sql<IngredientRow[]>`
-    select name, quantity, unit, category, is_staple
-    from recipe_ingredients where recipe_id = ${recipeId} order by position`;
+    select coalesce(ri.item, ri.name) as name, ri.quantity, ri.unit,
+           coalesce(i.category, ri.category) as category, coalesce(i.staple, ri.is_staple) as is_staple
+    from recipe_ingredients ri left join ingredients i on i.name = ri.item
+    where ri.recipe_id = ${recipeId} order by ri.position`;
   return rows.map((r) => ({
     name: r.name,
     // Postgres numeric comes back as a string.
