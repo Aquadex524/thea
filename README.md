@@ -6,6 +6,8 @@ Personal app that turns TikTok / Instagram cooking videos into structured recipe
 
 **Milestone 2:** every link you send Thea is saved to a **recipe library** (`/library`), with the link, the recipe and the date. A second iOS Shortcut, **Save to Thea**, saves in the background without opening Safari and just shows a notification.
 
+**Milestone 4 (first part):** a **Shop on Instacart** button on each saved recipe sends its ingredients to Instacart as a shopping list. Instacart opens with the items matched to real products at your store; you review and check out there.
+
 ## How it works
 
 1. `src/lib/sources/tiktok.ts` loads the TikTok video page, reads the embedded video data (caption, creator, length) and downloads TikTok's own subtitle file (WebVTT) for the spoken transcript. No TikTok account or paid service needed.
@@ -36,6 +38,23 @@ Check: open `https://thea-beta.vercel.app/library`. It should say "Nothing saved
 
 For local development, `vercel env pull .env.local` copies the same variables to your computer, or point `DATABASE_URL` at any Postgres.
 
+## Instacart
+
+`src/lib/instacart.ts` calls Instacart's [Create shopping list page](https://docs.instacart.com/developer_platform_api/api/products/create_shopping_list_page) API. Thea sends item names and amounts; Instacart answers with a link to a list page where you pick the store (Key Food), see matched products and prices, and check out. Instacart doesn't share prices or let Thea place the order itself.
+
+- Ingredients come from `src/lib/grocery/items.ts` (`GroceryItem`). That's the one place to switch to normalized items, and the weekly grocery list will use the same `createShoppingListLink()`.
+- Units are translated to the ones Instacart accepts (`g`, `cup`, `tbsp`, `can`, `bunch`, `each`…). Garlic cloves become one head. Anything Instacart can't measure (a pinch) is sent without an amount and Instacart suggests a normal pack.
+- Staples (salt, oil, basic spices) are left out unless you tick **Include staples**.
+- Instacart asks apps to reuse links, so Thea remembers each link in the `instacart_links` table and reuses it for 25 days while the list is unchanged.
+- `POST /api/instacart` with `{ "recipeId": "...", "includeStaples": false }` returns `{ url, itemCount }`.
+
+### Getting an Instacart API key
+
+1. Apply at [instacart.com/company/business/developers](https://www.instacart.com/company/business/developers) (**Apply today**).
+2. Once you have access, sign in to the developer dashboard, open **API Keys** → **Create New API Key**, name it `Thea`, choose **Development**, **Generate Key**, and copy it straight away (it's only shown once).
+3. In Vercel → **thea** → **Settings** → **Environment Variables**, add `INSTACART_API_KEY` with that key. Redeploy.
+4. Production keys: create a **Production** key in the same place. Instacart reviews it (they ask for a short demo video; their docs say about 30–40 days from request to production access). When it shows **Active**, put it in `INSTACART_API_KEY` and set `INSTACART_ENV` to `production`.
+
 ## Run locally
 
 ```bash
@@ -57,6 +76,8 @@ npx tsx scripts/try-fetch.mts "https://www.tiktok.com/@user/video/123" --extract
 |---|---|---|
 | `ANTHROPIC_API_KEY` | yes | Claude recipe extraction |
 | `THEA_SHARE_TOKEN` | recommended once deployed | Any long random string. Keeps strangers from using your Claude credits. The app asks for it once; the Shortcut sends it as `Authorization: Bearer …` |
+| `INSTACART_API_KEY` | optional | Turns on **Shop on Instacart**. See "Instacart" below |
+| `INSTACART_ENV` | optional | `development` (default) for a development key, `production` once Instacart approves a production key |
 | `SUPADATA_API_KEY` | optional | Transcripts for TikToks without subtitles, and for Instagram. Free tier: 100 credits/month |
 
 ## Deploy (Vercel)

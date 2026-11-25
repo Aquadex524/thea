@@ -8,6 +8,7 @@ import type { ImportResult } from "@/lib/recipe";
 import AccessCode from "../../access-code";
 import { fmtDate } from "../../library/library";
 import RecipeCard from "../../recipe-card";
+import SendToInstacart from "./send-to-instacart";
 import { authFetch } from "../../token";
 
 type Row = Omit<RecipeRow, "created_at" | "last_shared_at"> & { created_at: string; last_shared_at: string };
@@ -97,6 +98,8 @@ export default function SavedRecipe({ id }: { id: string }) {
       {error && row && <div className="rounded-2xl border border-rust/30 bg-rust/10 p-4 text-sm text-rust">{error}</div>}
 
       {result && <RecipeCard result={result} />}
+
+      {row.status === "ready" && result?.recipe.is_recipe && <SendToInstacart recipeId={row.id} />}
 
       <div className="space-y-1 rounded-2xl border border-line bg-card p-4 text-sm text-muted">
         <p>
